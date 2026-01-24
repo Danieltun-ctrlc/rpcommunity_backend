@@ -35,18 +35,6 @@ const dbConfig = {
   queueLimit: 0,
 };
 
-app.get("/allcards", async (req, res) => {
-  try {
-    const connection = await mysql.createConnection(dbConfig);
-    const [rows] = await connection.execute("SELECT * FROM defaultdb.cardsC");
-    await connection.end();
-    res.json(rows);
-    console.log(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "errors getting all the scams data" });
-  }
-});
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
