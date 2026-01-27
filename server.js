@@ -9,6 +9,76 @@ const jwt = require("jsonwebtoken");
 let app = express();
 app.use(express.json());
 
+const DEMO_USER = { user_id: 1, username: "24041225", password: "apple123" };
+
+// Middleware for verifying JWT token
+const verifyToken = (req, res, next) => {
+  const token = req.headers["authorization"];
+  if (!token) {
+    return res.status(403).send("A token is required for authentication");
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) return res.status(403).send("Invalid token");
+    req.user = decoded;
+    next();
+  });
+};
+
+// ================================
+// Authentication & Login Route
+// ================================
+
+// Login route for demo users and real users
+app.post("/login", async (req, res) => {
+  const { studentId, password } = req.body;
+
+  if (!studentId || !password) {
+    return res.status(400).send("Student ID and password are required");
+  }
+
+  // Check against demo user
+  if (studentId === DEMO_USER.username && password === DEMO_USER.password) {
+    const token = jwt.sign(
+      { id: DEMO_USER.user_id, username: DEMO_USER.username },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" },
+    );
+    return res.json({ token });
+  }
+
+  // For real users, check the database
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(
+      "SELECT * FROM users WHERE student_id = ?",
+      [studentId],
+    );
+    await connection.end();
+
+    if (rows.length === 0) {
+      return res.status(401).send("Student not found");
+    }
+
+    const user = rows[0];
+
+    // Match plain text password (no bcrypt)
+    if (user.password !== password) {
+      return res.status(401).send("Invalid credentials");
+    }
+
+    const token = jwt.sign(
+      { id: user.id, studentId: user.student_id },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" },
+    );
+    res.json({ token });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 const allowedOrigins = ["http://localhost:3000"];
 
 const corsOptions = {
@@ -297,76 +367,6 @@ app.delete("/posts/:id", async (req, res) => {
     if (conn) await conn.end();
   }
 });
-
-export async function getPosts() {
-  const res = await fetch(`${API_URL}/posts`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-export async function getPostById(id) {
-  const res = await fetch(`${API_URL}/posts/${id}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-export async function createPost(post) {
-  const res = await fetch(`${API_URL}/posts`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeader(),
-    },
-    body: JSON.stringify({
-      user_id: post.user_id,
-      title: post.title,
-      content: post.content,
-      category: post.category,
-    }),
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to create post");
-  }
-
-  return res.json();
-}
-
-export async function updatePost(id, post) {
-  const res = await fetch(`${API_URL}/posts/${id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeader(),
-    },
-    body: JSON.stringify({
-      title: post.title,
-      content: post.content,
-      category: post.category,
-    }),
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to update post");
-  }
-
-  return res.json();
-}
-
-export async function deletePost(id) {
-  const res = await fetch(`${API_URL}/posts/${id}`, {
-    method: "DELETE",
-    headers: {
-      ...authHeader(),
-    },
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to delete post");
-  }
-
-  return res.json();
-}
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
