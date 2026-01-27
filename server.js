@@ -4,6 +4,7 @@ env_set.config();
 const mysql = require("mysql2/promise");
 let express = require("express");
 let cors = require("cors");
+const jwt = require("jsonwebtoken");
 
 let app = express();
 app.use(express.json());
@@ -34,6 +35,22 @@ const dbConfig = {
   queueLimit: 0,
 };
 
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (token == null) return res.sendStatus(401);
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+
+    //
+    req.user = user;
+    next();
+  });
+}
+
+app.use(authenticateToken);
 //Event (Jiayi)
 // GET all events
 app.get("/events", async (req, res) => {
@@ -280,6 +297,76 @@ app.delete("/posts/:id", async (req, res) => {
     if (conn) await conn.end();
   }
 });
+
+export async function getPosts() {
+  const res = await fetch(`${API_URL}/posts`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function getPostById(id) {
+  const res = await fetch(`${API_URL}/posts/${id}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function createPost(post) {
+  const res = await fetch(`${API_URL}/posts`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+    },
+    body: JSON.stringify({
+      user_id: post.user_id,
+      title: post.title,
+      content: post.content,
+      category: post.category,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to create post");
+  }
+
+  return res.json();
+}
+
+export async function updatePost(id, post) {
+  const res = await fetch(`${API_URL}/posts/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+    },
+    body: JSON.stringify({
+      title: post.title,
+      content: post.content,
+      category: post.category,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to update post");
+  }
+
+  return res.json();
+}
+
+export async function deletePost(id) {
+  const res = await fetch(`${API_URL}/posts/${id}`, {
+    method: "DELETE",
+    headers: {
+      ...authHeader(),
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to delete post");
+  }
+
+  return res.json();
+}
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
