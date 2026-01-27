@@ -4,12 +4,27 @@ env_set.config();
 const mysql = require("mysql2/promise");
 let express = require("express");
 let cors = require("cors");
+const jwt = require("jsonwebtoken");
 
 let app = express();
 app.use(express.json());
 
 const DEMO_USER = { user_id: 1, username: "24041225", password: "apple123" };
 
+// Database configuration - move up before it's used
+const dbConfig = {
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  port: Number(process.env.DB_PORT),
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+};
+
+// Create connection pool
+const pool = mysql.createPool(dbConfig);
 
 const verifyToken = (req, res, next) => {
   const token = req.headers["authorization"];
@@ -48,12 +63,12 @@ app.post("/login", async (req, res) => {
 
   // For real users, check the database
   try {
-    const connection = await mysql.createConnection(dbConfig);
+    const connection = await pool.getConnection();
     const [rows] = await connection.execute(
       "SELECT * FROM users WHERE student_id = ?",
       [studentId],
     );
-    await connection.end();
+    connection.release();
 
     if (rows.length === 0) {
       return res.status(401).send("Student not found");
@@ -93,30 +108,19 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-const dbConfig = {
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: Number(process.env.DB_PORT),
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-};
-
 //Event (Jiayi)
 // GET all events
 app.get("/events", async (req, res) => {
   let conn;
   try {
-    conn = await mysql.createConnection(dbConfig);
+    conn = await pool.getConnection();
     const [rows] = await conn.execute("SELECT * FROM events");
     res.json(rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to fetch events" });
   } finally {
-    if (conn) await conn.end();
+    if (conn) conn.release();
   }
 });
 
@@ -124,7 +128,7 @@ app.get("/events", async (req, res) => {
 app.get("/events/:id", async (req, res) => {
   let conn;
   try {
-    conn = await mysql.createConnection(dbConfig);
+    conn = await pool.getConnection();
     const [rows] = await conn.execute(
       "SELECT * FROM events WHERE event_id = ?",
       [req.params.id],
@@ -139,7 +143,7 @@ app.get("/events/:id", async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Failed to fetch event" });
   } finally {
-    if (conn) await conn.end();
+    if (conn) conn.release();
   }
 });
 
@@ -154,7 +158,7 @@ app.post("/events", async (req, res) => {
 
   let conn;
   try {
-    conn = await mysql.createConnection(dbConfig);
+    conn = await pool.getConnection();
     await conn.execute(
       `INSERT INTO events
        (title, description, event_date, event_time, location, creator_id)
@@ -167,7 +171,7 @@ app.post("/events", async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Failed to add event" });
   } finally {
-    if (conn) await conn.end();
+    if (conn) conn.release();
   }
 });
 
@@ -177,7 +181,7 @@ app.put("/events/:id", async (req, res) => {
 
   let conn;
   try {
-    conn = await mysql.createConnection(dbConfig);
+    conn = await pool.getConnection();
     await conn.execute(
       `UPDATE events
        SET title = ?, description = ?, event_date = ?, event_time = ?, location = ?
@@ -190,7 +194,7 @@ app.put("/events/:id", async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Failed to update event" });
   } finally {
-    if (conn) await conn.end();
+    if (conn) conn.release();
   }
 });
 
@@ -198,7 +202,7 @@ app.put("/events/:id", async (req, res) => {
 app.delete("/events/:id", async (req, res) => {
   let conn;
   try {
-    conn = await mysql.createConnection(dbConfig);
+    conn = await pool.getConnection();
     await conn.execute("DELETE FROM events WHERE event_id = ?", [
       req.params.id,
     ]);
@@ -208,14 +212,14 @@ app.delete("/events/:id", async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Failed to delete event" });
   } finally {
-    if (conn) await conn.end();
+    if (conn) conn.release();
   }
 });
 
 app.get("/posts", async (req, res) => {
   let conn;
   try {
-    conn = await mysql.createConnection(dbConfig);
+    conn = await pool.getConnection();
 
     const query = `
       SELECT Posts.*, Users.username, Users.school, Users.diploma 
@@ -230,14 +234,14 @@ app.get("/posts", async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Failed to fetch posts" });
   } finally {
-    if (conn) await conn.end();
+    if (conn) conn.release();
   }
 });
 
 app.get("/posts/:id", async (req, res) => {
   let conn;
   try {
-    conn = await mysql.createConnection(dbConfig);
+    conn = await pool.getConnection();
     const query = `
       SELECT Posts.*, Users.username, Users.school 
       FROM Posts 
@@ -255,7 +259,7 @@ app.get("/posts/:id", async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Failed to fetch post" });
   } finally {
-    if (conn) await conn.end();
+    if (conn) conn.release();
   }
 });
 
@@ -271,7 +275,7 @@ app.post("/posts", async (req, res) => {
 
   let conn;
   try {
-    conn = await mysql.createConnection(dbConfig);
+    conn = await pool.getConnection();
     const query = `
       INSERT INTO Posts (user_id, title, content, category) 
       VALUES (?, ?, ?, ?)
@@ -292,7 +296,7 @@ app.post("/posts", async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Failed to create post" });
   } finally {
-    if (conn) await conn.end();
+    if (conn) conn.release();
   }
 });
 
@@ -301,7 +305,7 @@ app.put("/posts/:id", async (req, res) => {
 
   let conn;
   try {
-    conn = await mysql.createConnection(dbConfig);
+    conn = await pool.getConnection();
 
     const query = `
       UPDATE Posts 
@@ -325,14 +329,14 @@ app.put("/posts/:id", async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Failed to update post" });
   } finally {
-    if (conn) await conn.end();
+    if (conn) conn.release();
   }
 });
 
 app.delete("/posts/:id", async (req, res) => {
   let conn;
   try {
-    conn = await mysql.createConnection(dbConfig);
+    conn = await pool.getConnection();
 
     const [result] = await conn.execute("DELETE FROM Posts WHERE post_id = ?", [
       req.params.id,
@@ -347,7 +351,7 @@ app.delete("/posts/:id", async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Failed to delete post" });
   } finally {
-    if (conn) await conn.end();
+    if (conn) conn.release();
   }
 });
 
@@ -376,9 +380,9 @@ app.get("/notes", verifyToken, async (req, res) => {
   }
 
   try {
-    const connection = await mysql.createConnection(dbConfig);
+    const connection = await pool.getConnection();
     const [rows] = await connection.execute(query, values);
-    await connection.end();
+    connection.release();
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -398,12 +402,12 @@ app.post("/notes", verifyToken, async (req, res) => {
   }
 
   try {
-    const connection = await mysql.createConnection(dbConfig);
+    const connection = await pool.getConnection();
     await connection.execute(
       "INSERT INTO notes (user_id, title, description, content, pdf_url, school_of, diploma) VALUES (?, ?, ?, ?, ?, ?, ?)",
       [req.user.id, title, description, content, pdf_url, school_of, diploma]
     );
-    await connection.end();
+    connection.release();
     res.status(201).json({ message: "Note added successfully" });
   } catch (err) {
     console.error(err);
@@ -424,12 +428,12 @@ app.put("/notes/:id", verifyToken, async (req, res) => {
   }
 
   try {
-    const connection = await mysql.createConnection(dbConfig);
+    const connection = await pool.getConnection();
     const [result] = await connection.execute(
       "UPDATE notes SET title = ?, description = ?, content = ?, pdf_url = ?, school_of = ?, diploma = ? WHERE note_id = ? AND user_id = ?",
       [title, description, content, pdf_url, school_of, diploma, id, req.user.id]
     );
-    await connection.end();
+    connection.release();
 
     if (result.affectedRows === 0) {
       return res
@@ -453,12 +457,12 @@ app.delete("/notes/:id", verifyToken, async (req, res) => {
   }
 
   try {
-    const connection = await mysql.createConnection(dbConfig);
+    const connection = await pool.getConnection();
     const [result] = await connection.execute("DELETE FROM notes WHERE note_id = ? AND user_id = ?", [
       id,
       req.user.id,
     ]);
-    await connection.end();
+    connection.release();
 
     if (result.affectedRows === 0) {
       return res
