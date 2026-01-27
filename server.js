@@ -10,7 +10,7 @@ app.use(express.json());
 
 const DEMO_USER = { user_id: 1, username: "24041225", password: "apple123" };
 
-// Middleware for verifying JWT token
+
 const verifyToken = (req, res, next) => {
   const token = req.headers["authorization"];
   if (!token) {
@@ -352,9 +352,13 @@ app.delete("/posts/:id", async (req, res) => {
 });
 
 app.get("/notes", verifyToken, async (req, res) => {
-  const { diploma, school_of, search } = req.query;
+  const { user_id, diploma, school_of, search } = req.query;
+
+  if (!user_id) {
+    return res.status(400).json({ message: "user_id is required" });
+  }
   let query = "SELECT * FROM notes WHERE user_id = ?";
-  let values = [req.user.id];
+  let values = [user_id];
 
   if (diploma) {
     query += " AND diploma = ?";
@@ -383,12 +387,10 @@ app.get("/notes", verifyToken, async (req, res) => {
 });
 
 app.post("/notes", verifyToken, async (req, res) => {
-  const { title, description, content, pdf_url, school_of, diploma } = req.body;
+  const { user_id, title, description, content, pdf_url, school_of, diploma } = req.body;
 
   if (!title || !description || !school_of || !diploma) {
-    return res
-      .status(400)
-      .send("Title, description, school_of, and diploma are required");
+    return res.status(400).send("Title, description, school_of, and diploma are required");
   }
 
   if (!content && !pdf_url) {
@@ -399,7 +401,7 @@ app.post("/notes", verifyToken, async (req, res) => {
     const connection = await mysql.createConnection(dbConfig);
     await connection.execute(
       "INSERT INTO notes (user_id, title, description, content, pdf_url, school_of, diploma) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [req.user.id, title, description, content, pdf_url, school_of, diploma],
+      [req.user.id, title, description, content, pdf_url, school_of, diploma]
     );
     await connection.end();
     res.status(201).json({ message: "Note added successfully" });
@@ -411,12 +413,10 @@ app.post("/notes", verifyToken, async (req, res) => {
 
 app.put("/notes/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { title, description, content, pdf_url, school_of, diploma } = req.body;
+  const { user_id, title, description, content, pdf_url, school_of, diploma } = req.body;
 
   if (!title || !description || !school_of || !diploma) {
-    return res
-      .status(400)
-      .send("Title, description, school_of, and diploma are required");
+    return res.status(400).send("Title, description, school_of, and diploma are required");
   }
 
   if (!content && !pdf_url) {
@@ -427,16 +427,7 @@ app.put("/notes/:id", verifyToken, async (req, res) => {
     const connection = await mysql.createConnection(dbConfig);
     const [result] = await connection.execute(
       "UPDATE notes SET title = ?, description = ?, content = ?, pdf_url = ?, school_of = ?, diploma = ? WHERE note_id = ? AND user_id = ?",
-      [
-        title,
-        description,
-        content,
-        pdf_url,
-        school_of,
-        diploma,
-        id,
-        req.user.id,
-      ],
+      [title, description, content, pdf_url, school_of, diploma, id, req.user.id]
     );
     await connection.end();
 
@@ -455,13 +446,18 @@ app.put("/notes/:id", verifyToken, async (req, res) => {
 
 app.delete("/notes/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
+  const { user_id } = req.body;
+
+  if (!user_id) {
+    return res.status(400).send("User ID is required");
+  }
 
   try {
     const connection = await mysql.createConnection(dbConfig);
-    const [result] = await connection.execute(
-      "DELETE FROM notes WHERE note_id = ? AND user_id = ?",
-      [id, req.user.id],
-    );
+    const [result] = await connection.execute("DELETE FROM notes WHERE note_id = ? AND user_id = ?", [
+      id,
+      req.user.id,
+    ]);
     await connection.end();
 
     if (result.affectedRows === 0) {
