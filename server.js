@@ -4,7 +4,6 @@ env_set.config();
 const mysql = require("mysql2/promise");
 let express = require("express");
 let cors = require("cors");
-const jwt = require("jsonwebtoken");
 
 let app = express();
 app.use(express.json());
@@ -105,22 +104,6 @@ const dbConfig = {
   queueLimit: 0,
 };
 
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
-
-  if (token == null) return res.sendStatus(401);
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-
-    //
-    req.user = user;
-    next();
-  });
-}
-
-app.use(authenticateToken);
 //Event (Jiayi)
 // GET all events
 app.get("/events", async (req, res) => {
@@ -365,6 +348,132 @@ app.delete("/posts/:id", async (req, res) => {
     res.status(500).json({ message: "Failed to delete post" });
   } finally {
     if (conn) await conn.end();
+  }
+});
+
+app.get("/notes", verifyToken, async (req, res) => {
+  const { diploma, school_of, search } = req.query;
+  let query = "SELECT * FROM notes WHERE user_id = ?";
+  let values = [req.user.id];
+
+  if (diploma) {
+    query += " AND diploma = ?";
+    values.push(diploma);
+  }
+
+  if (school_of) {
+    query += " AND school_of = ?";
+    values.push(school_of);
+  }
+
+  if (search) {
+    query += " AND title LIKE ?";
+    values.push(`%${search}%`);
+  }
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(query, values);
+    await connection.end();
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error fetching notes");
+  }
+});
+
+app.post("/notes", verifyToken, async (req, res) => {
+  const { title, description, content, pdf_url, school_of, diploma } = req.body;
+
+  if (!title || !description || !school_of || !diploma) {
+    return res
+      .status(400)
+      .send("Title, description, school_of, and diploma are required");
+  }
+
+  if (!content && !pdf_url) {
+    return res.status(400).send("Content or PDF URL is required");
+  }
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    await connection.execute(
+      "INSERT INTO notes (user_id, title, description, content, pdf_url, school_of, diploma) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [req.user.id, title, description, content, pdf_url, school_of, diploma],
+    );
+    await connection.end();
+    res.status(201).json({ message: "Note added successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error adding note");
+  }
+});
+
+app.put("/notes/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const { title, description, content, pdf_url, school_of, diploma } = req.body;
+
+  if (!title || !description || !school_of || !diploma) {
+    return res
+      .status(400)
+      .send("Title, description, school_of, and diploma are required");
+  }
+
+  if (!content && !pdf_url) {
+    return res.status(400).send("Content or PDF URL is required");
+  }
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [result] = await connection.execute(
+      "UPDATE notes SET title = ?, description = ?, content = ?, pdf_url = ?, school_of = ?, diploma = ? WHERE note_id = ? AND user_id = ?",
+      [
+        title,
+        description,
+        content,
+        pdf_url,
+        school_of,
+        diploma,
+        id,
+        req.user.id,
+      ],
+    );
+    await connection.end();
+
+    if (result.affectedRows === 0) {
+      return res
+        .status(404)
+        .send("Note not found or you don’t have permission to edit it");
+    }
+
+    res.json({ message: "Note updated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error updating note");
+  }
+});
+
+app.delete("/notes/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [result] = await connection.execute(
+      "DELETE FROM notes WHERE note_id = ? AND user_id = ?",
+      [id, req.user.id],
+    );
+    await connection.end();
+
+    if (result.affectedRows === 0) {
+      return res
+        .status(404)
+        .send("Note not found or you don’t have permission to delete it");
+    }
+
+    res.json({ message: "Note deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error deleting note");
   }
 });
 
