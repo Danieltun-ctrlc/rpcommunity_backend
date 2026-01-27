@@ -8,6 +8,76 @@ let cors = require("cors");
 let app = express();
 app.use(express.json());
 
+const DEMO_USER = { user_id: 1, username: "24041225", password: "apple123" };
+
+// Middleware for verifying JWT token
+const verifyToken = (req, res, next) => {
+  const token = req.headers["authorization"];
+  if (!token) {
+    return res.status(403).send("A token is required for authentication");
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) return res.status(403).send("Invalid token");
+    req.user = decoded;
+    next();
+  });
+};
+
+// ================================
+// Authentication & Login Route
+// ================================
+
+// Login route for demo users and real users
+app.post("/login", async (req, res) => {
+  const { studentId, password } = req.body;
+
+  if (!studentId || !password) {
+    return res.status(400).send("Student ID and password are required");
+  }
+
+  // Check against demo user
+  if (studentId === DEMO_USER.username && password === DEMO_USER.password) {
+    const token = jwt.sign(
+      { id: DEMO_USER.user_id, username: DEMO_USER.username },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+    return res.json({ token });
+  }
+
+  // For real users, check the database
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(
+      "SELECT * FROM users WHERE student_id = ?",
+      [studentId]
+    );
+    await connection.end();
+
+    if (rows.length === 0) {
+      return res.status(401).send("Student not found");
+    }
+
+    const user = rows[0];
+
+    // Match plain text password (no bcrypt)
+    if (user.password !== password) {
+      return res.status(401).send("Invalid credentials");
+    }
+
+    const token = jwt.sign(
+      { id: user.id, studentId: user.student_id },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+    res.json({ token });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 const allowedOrigins = ["http://localhost:3000"];
 
 const corsOptions = {
@@ -280,6 +350,117 @@ app.delete("/posts/:id", async (req, res) => {
     if (conn) await conn.end();
   }
 });
+
+app.get("/notes", verifyToken, async (req, res) => {
+  const { diploma, school_of, search } = req.query;
+  let query = "SELECT * FROM notes WHERE user_id = ?";
+  let values = [req.user.id];
+
+  if (diploma) {
+    query += " AND diploma = ?";
+    values.push(diploma);
+  }
+
+  if (school_of) {
+    query += " AND school_of = ?";
+    values.push(school_of);
+  }
+
+  if (search) {
+    query += " AND title LIKE ?";
+    values.push(`%${search}%`);
+  }
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [rows] = await connection.execute(query, values);
+    await connection.end();
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error fetching notes");
+  }
+});
+
+app.post("/notes", verifyToken, async (req, res) => {
+  const { title, description, content, pdf_url, school_of, diploma } = req.body;
+
+  if (!title || !description || !school_of || !diploma) {
+    return res.status(400).send("Title, description, school_of, and diploma are required");
+  }
+
+  if (!content && !pdf_url) {
+    return res.status(400).send("Content or PDF URL is required");
+  }
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    await connection.execute(
+      "INSERT INTO notes (user_id, title, description, content, pdf_url, school_of, diploma) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [req.user.id, title, description, content, pdf_url, school_of, diploma]
+    );
+    await connection.end();
+    res.status(201).json({ message: "Note added successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error adding note");
+  }
+});
+
+app.put("/notes/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const { title, description, content, pdf_url, school_of, diploma } = req.body;
+
+  if (!title || !description || !school_of || !diploma) {
+    return res.status(400).send("Title, description, school_of, and diploma are required");
+  }
+
+  if (!content && !pdf_url) {
+    return res.status(400).send("Content or PDF URL is required");
+  }
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [result] = await connection.execute(
+      "UPDATE notes SET title = ?, description = ?, content = ?, pdf_url = ?, school_of = ?, diploma = ? WHERE note_id = ? AND user_id = ?",
+      [title, description, content, pdf_url, school_of, diploma, id, req.user.id]
+    );
+    await connection.end();
+
+    if (result.affectedRows === 0) {
+      return res.status(404).send("Note not found or you don’t have permission to edit it");
+    }
+
+    res.json({ message: "Note updated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error updating note");
+  }
+});
+
+app.delete("/notes/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    const [result] = await connection.execute("DELETE FROM notes WHERE note_id = ? AND user_id = ?", [
+      id,
+      req.user.id,
+    ]);
+    await connection.end();
+
+    if (result.affectedRows === 0) {
+      return res.status(404).send("Note not found or you don’t have permission to delete it");
+    }
+
+    res.json({ message: "Note deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error deleting note");
+  }
+});
+
+
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
