@@ -4,6 +4,7 @@ env_set.config();
 const mysql = require("mysql2/promise");
 let express = require("express");
 let cors = require("cors");
+let jwt = require("jsonwebtoken");
 
 let app = express();
 app.use(express.json());
@@ -50,7 +51,7 @@ app.post("/login", async (req, res) => {
   try {
     const connection = await mysql.createConnection(dbConfig);
     const [rows] = await connection.execute(
-      "SELECT * FROM users WHERE student_id = ?",
+      "SELECT * FROM Users WHERE user_id = ?",
       [studentId],
     );
     await connection.end();
