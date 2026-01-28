@@ -364,7 +364,7 @@ app.delete("/posts/:id", async (req, res) => {
 });
 
 app.get("/notes", verifyToken, async (req, res) => {
-  const { diploma, school_of, search } = req.query;
+  const { user_id, diploma, school_of, search } = req.query;
 
   let query = "SELECT * FROM notes WHERE user_id = ?";
   let user_id = req.user.id;
