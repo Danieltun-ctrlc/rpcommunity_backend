@@ -10,7 +10,7 @@ app.use(express.json());
 
 const DEMO_USER = { user_id: 1, username: "24041225", password: "apple123" };
 
-// Database configuration - move up before it's used
+// Database configuration
 const dbConfig = {
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -42,20 +42,21 @@ app.use(cors(corsOptions));
 
 const verifyToken = (req, res, next) => {
   const header = req.headers.authorization;
+  if (!header) {
+    return res.status(401).json({ error: "Authorization header missing" });
+  }
+  
   const [type, token] = header.split(" ");
-  console.log(token);
+  
   if (type !== "Bearer" || !token) {
     return res.status(401).json({ error: "Invalid Authorization format" });
   }
-  console.log("yes");
 
-  console.log("leeeerereee");
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) return console.error(err.message);
-    console.log("okay");
-    console.log(decoded);
+    if (err) {
+      return res.status(403).json({ error: "Invalid or expired token" });
+    }
     req.user = decoded;
-    console.log(req.user);
     next();
   });
 };
@@ -64,7 +65,6 @@ const verifyToken = (req, res, next) => {
 // Authentication & Login Route
 // ================================
 
-// Login route for demo users and real users
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
@@ -75,12 +75,11 @@ app.post("/login", async (req, res) => {
   // Check against demo user
   if (username === DEMO_USER.username && password === DEMO_USER.password) {
     const token = jwt.sign(
-      { id: DEMO_USER.username, username: "kaelynn" },
+      { user_id: DEMO_USER.user_id, id: DEMO_USER.user_id, username: DEMO_USER.username },
       process.env.JWT_SECRET,
       { expiresIn: "1h" },
     );
-    console.log("n");
-    return res.json({ token });
+    return res.json({ token, user_id: DEMO_USER.user_id });
   }
 
   // For real users, check the database
@@ -104,19 +103,21 @@ app.post("/login", async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, studentId: user.student_id },
+      { id: user.user_id, user_id: user.user_id, studentId: user.student_id },
       process.env.JWT_SECRET,
       { expiresIn: "1h" },
     );
-    res.json({ token });
+    res.json({ token, user_id: user.user_id });
   } catch (err) {
     console.error(err);
     res.status(500).send("Internal Server Error");
   }
 });
 
-//Event (Jiayi)
-// GET all events
+// ================================
+// Events Routes
+// ================================
+
 app.get("/events", async (req, res) => {
   let conn;
   try {
@@ -131,7 +132,6 @@ app.get("/events", async (req, res) => {
   }
 });
 
-// GET event by ID
 app.get("/events/:id", async (req, res) => {
   let conn;
   try {
@@ -154,12 +154,10 @@ app.get("/events/:id", async (req, res) => {
   }
 });
 
-// ADD new event
 app.post("/events", verifyToken, async (req, res) => {
   const { title, description, event_date, event_time, location } = req.body;
 
   let creator_id = req.user.id;
-  console.log(creator_id + "leeeeee");
 
   if (!title || !event_date || !event_time) {
     return res.status(400).json({ message: "Missing required fields" });
@@ -169,8 +167,7 @@ app.post("/events", verifyToken, async (req, res) => {
   try {
     conn = await pool.getConnection();
     await conn.execute(
-      `INSERT INTO events
-       (title, description, event_date, event_time, location, creator_id)
+      `INSERT INTO events (title, description, event_date, event_time, location, creator_id)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [title, description, event_date, event_time, location, creator_id],
     );
@@ -184,8 +181,7 @@ app.post("/events", verifyToken, async (req, res) => {
   }
 });
 
-// UPDATE event
-app.put("/events/:id", async (req, res) => {
+app.put("/events/:id", verifyToken, async (req, res) => {
   const { title, description, event_date, event_time, location } = req.body;
 
   let conn;
@@ -207,8 +203,7 @@ app.put("/events/:id", async (req, res) => {
   }
 });
 
-// DELETE event
-app.delete("/events/:id", async (req, res) => {
+app.delete("/events/:id", verifyToken, async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
@@ -225,18 +220,20 @@ app.delete("/events/:id", async (req, res) => {
   }
 });
 
+// ================================
+// Posts Routes
+// ================================
+
 app.get("/posts", async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
-
     const query = `
       SELECT Posts.*, Users.username, Users.school, Users.diploma 
       FROM Posts 
       JOIN Users ON Posts.user_id = Users.user_id 
       ORDER BY Posts.created_at DESC
     `;
-
     const [rows] = await conn.execute(query);
     res.json(rows);
   } catch (err) {
@@ -272,30 +269,19 @@ app.get("/posts/:id", async (req, res) => {
   }
 });
 
-app.post("/posts", async (req, res) => {
-  const { user_id, title, content, category } = req.body;
+app.post("/posts", verifyToken, async (req, res) => {
+  const { title, content, category } = req.body;
+  const user_id = req.user.user_id;
 
-  // Validation
-  if (!user_id || !content) {
-    return res
-      .status(400)
-      .json({ message: "User ID and Content are required" });
+  if (!content) {
+    return res.status(400).json({ message: "Content is required" });
   }
 
   let conn;
   try {
     conn = await pool.getConnection();
-    const query = `
-      INSERT INTO Posts (user_id, title, content, category) 
-      VALUES (?, ?, ?, ?)
-    `;
-
-    const [result] = await conn.execute(query, [
-      user_id,
-      title,
-      content,
-      category,
-    ]);
+    const query = `INSERT INTO Posts (user_id, title, content, category) VALUES (?, ?, ?, ?)`;
+    const [result] = await conn.execute(query, [user_id, title, content, category]);
 
     res.status(201).json({
       message: "Post created successfully",
@@ -309,25 +295,14 @@ app.post("/posts", async (req, res) => {
   }
 });
 
-app.put("/posts/:id", async (req, res) => {
+app.put("/posts/:id", verifyToken, async (req, res) => {
   const { title, content, category } = req.body;
 
   let conn;
   try {
     conn = await pool.getConnection();
-
-    const query = `
-      UPDATE Posts 
-      SET title = ?, content = ?, category = ? 
-      WHERE post_id = ?
-    `;
-
-    const [result] = await conn.execute(query, [
-      title,
-      content,
-      category,
-      req.params.id,
-    ]);
+    const query = `UPDATE Posts SET title = ?, content = ?, category = ? WHERE post_id = ?`;
+    const [result] = await conn.execute(query, [title, content, category, req.params.id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Post not found" });
@@ -342,11 +317,10 @@ app.put("/posts/:id", async (req, res) => {
   }
 });
 
-app.delete("/posts/:id", async (req, res) => {
+app.delete("/posts/:id", verifyToken, async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
-
     const [result] = await conn.execute("DELETE FROM Posts WHERE post_id = ?", [
       req.params.id,
     ]);
@@ -364,141 +338,159 @@ app.delete("/posts/:id", async (req, res) => {
   }
 });
 
-app.get("/mynotes", verifyToken, async (req, res) => {
-  const userId = req.user.id;  // Get the user_id from the token
+// ================================
+// Notes Routes (FIXED)
+// ================================
 
+// Get My Notes (User specific)
+app.get("/mynotes", verifyToken, async (req, res) => {
+  const userId = req.user.user_id || req.user.id;
+
+  let conn;
   try {
-    const connection = await pool.getConnection();
-    const [rows] = await connection.execute(
-      "SELECT * FROM notes WHERE user_id = ?",
+    conn = await pool.getConnection();
+    const [rows] = await conn.execute(
+      "SELECT * FROM notes WHERE user_id = ? ORDER BY created_at DESC",
       [userId]
     );
-    connection.release();
-
     res.json(rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to fetch your notes" });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
-// ============================
-// Get All Notes from All Users
-// ============================
 app.get("/notes", verifyToken, async (req, res) => {
+  let conn;
   try {
-    const connection = await pool.getConnection();
-    const [rows] = await connection.execute(
-      "SELECT * FROM notes"
-    );
-    connection.release();
-
+    conn = await pool.getConnection();
+    const [rows] = await conn.execute("SELECT * FROM notes ORDER BY created_at DESC");
     res.json(rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to fetch all notes" });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
-app.post("/notes", verifyToken, async (req, res) => {
-  const { user_id, title, description, content, pdf_url, school_of, diploma } =
-    req.body;
+app.get("/notes/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.user_id || req.user.id;
+  
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const [rows] = await conn.execute(
+      "SELECT * FROM notes WHERE note_id = ?", 
+      [id]
+    );
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Note not found" });
+    }
+    
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal server error" });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+app.post("/notes/add", verifyToken, async (req, res) => {
+  const user_id = req.user.user_id || req.user.id;
+  const { title, description, content, pdf_url, school_of, diploma } = req.body;
 
   if (!title || !description || !school_of || !diploma) {
-    return res
-      .status(400)
-      .send("Title, description, school_of, and diploma are required");
+    return res.status(400).send("Title, description, school_of, and diploma are required");
   }
 
   if (!content && !pdf_url) {
     return res.status(400).send("Content or PDF URL is required");
   }
 
+  let conn;
   try {
-    const connection = await pool.getConnection();
-    await connection.execute(
+    conn = await pool.getConnection();
+    const [result] = await conn.execute(
       "INSERT INTO notes (user_id, title, description, content, pdf_url, school_of, diploma) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [req.user.id, title, description, content, pdf_url, school_of, diploma],
+      [user_id, title, description, content, pdf_url, school_of, diploma],
     );
-    connection.release();
-    res.status(201).json({ message: "Note added successfully" });
+    
+    res.status(201).json({ 
+      message: "Note added successfully",
+      note_id: result.insertId 
+    });
   } catch (err) {
     console.error(err);
     res.status(500).send("Error adding note");
+  } finally {
+    if (conn) conn.release();
   }
 });
 
+// Update Note
 app.put("/notes/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { user_id, title, description, content, pdf_url, school_of, diploma } =
-    req.body;
+  const user_id = req.user.user_id || req.user.id;
+  const { title, description, content, pdf_url, school_of, diploma } = req.body;
 
   if (!title || !description || !school_of || !diploma) {
-    return res
-      .status(400)
-      .send("Title, description, school_of, and diploma are required");
+    return res.status(400).send("Title, description, school_of, and diploma are required");
   }
 
   if (!content && !pdf_url) {
     return res.status(400).send("Content or PDF URL is required");
   }
 
+  let conn;
   try {
-    const connection = await pool.getConnection();
-    const [result] = await connection.execute(
+    conn = await pool.getConnection();
+    const [result] = await conn.execute(
       "UPDATE notes SET title = ?, description = ?, content = ?, pdf_url = ?, school_of = ?, diploma = ? WHERE note_id = ? AND user_id = ?",
-      [
-        title,
-        description,
-        content,
-        pdf_url,
-        school_of,
-        diploma,
-        id,
-        req.user.id,
-      ],
+      [title, description, content, pdf_url, school_of, diploma, id, user_id],
     );
-    connection.release();
 
     if (result.affectedRows === 0) {
-      return res
-        .status(404)
-        .send("Note not found or you don’t have permission to edit it");
+      return res.status(404).send("Note not found or you don't have permission to edit it");
     }
 
     res.json({ message: "Note updated successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).send("Error updating note");
+  } finally {
+    if (conn) conn.release();
   }
 });
 
+// Delete Note (FIXED - removed requirement for user_id in body)
 app.delete("/notes/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { user_id } = req.body;
+  const user_id = req.user.user_id || req.user.id;
 
-  if (!user_id) {
-    return res.status(400).send("User ID is required");
-  }
-
+  let conn;
   try {
-    const connection = await pool.getConnection();
-    const [result] = await connection.execute(
+    conn = await pool.getConnection();
+    const [result] = await conn.execute(
       "DELETE FROM notes WHERE note_id = ? AND user_id = ?",
-      [id, req.user.id],
+      [id, user_id],
     );
-    connection.release();
 
     if (result.affectedRows === 0) {
-      return res
-        .status(404)
-        .send("Note not found or you don’t have permission to delete it");
+      return res.status(404).send("Note not found or you don't have permission to delete it");
     }
 
     res.json({ message: "Note deleted successfully" });
   } catch (err) {
     console.error(err);
     res.status(500).send("Error deleting note");
+  } finally {
+    if (conn) conn.release();
   }
 });
 
