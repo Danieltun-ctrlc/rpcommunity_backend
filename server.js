@@ -25,15 +25,37 @@ const dbConfig = {
 // Create connection pool
 const pool = mysql.createPool(dbConfig);
 
-const verifyToken = (req, res, next) => {
-  const token = req.headers["authorization"];
-  if (!token) {
-    return res.status(403).send("A token is required for authentication");
-  }
+const allowedOrigins = ["http://localhost:3000"];
 
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("Not allowed by CORS"));
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: false,
+};
+
+app.use(cors(corsOptions));
+
+const verifyToken = (req, res, next) => {
+  const header = req.headers.authorization;
+  const [type, token] = header.split(" ");
+  console.log(token);
+  if (type !== "Bearer" || !token) {
+    return res.status(401).json({ error: "Invalid Authorization format" });
+  }
+  console.log("yes");
+
+  console.log("leeeerereee");
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(403).send("Invalid token");
+    if (err) return console.error(err.message);
+    console.log("okay");
+    console.log(decoded);
     req.user = decoded;
+    console.log(req.user);
     next();
   });
 };
@@ -44,19 +66,20 @@ const verifyToken = (req, res, next) => {
 
 // Login route for demo users and real users
 app.post("/login", async (req, res) => {
-  const { studentId, password } = req.body;
+  const { username, password } = req.body;
 
-  if (!studentId || !password) {
+  if (!username || !password) {
     return res.status(400).send("Student ID and password are required");
   }
 
   // Check against demo user
-  if (studentId === DEMO_USER.username && password === DEMO_USER.password) {
+  if (username === DEMO_USER.username && password === DEMO_USER.password) {
     const token = jwt.sign(
       { id: DEMO_USER.user_id, username: DEMO_USER.username },
       process.env.JWT_SECRET,
       { expiresIn: "1h" },
     );
+    console.log("n");
     return res.json({ token });
   }
 
@@ -65,7 +88,7 @@ app.post("/login", async (req, res) => {
     const connection = await pool.getConnection();
     const [rows] = await connection.execute(
       "SELECT * FROM Users WHERE user_id = ?",
-      [studentId],
+      [username],
     );
     connection.release();
 
@@ -91,21 +114,6 @@ app.post("/login", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
-
-const allowedOrigins = ["http://localhost:3000"];
-
-const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error("Not allowed by CORS"));
-  },
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: false,
-};
-
-app.use(cors(corsOptions));
 
 //Event (Jiayi)
 // GET all events
@@ -147,9 +155,10 @@ app.get("/events/:id", async (req, res) => {
 });
 
 // ADD new event
-app.post("/events", async (req, res) => {
-  const { title, description, event_date, event_time, location, creator_id } =
-    req.body;
+app.post("/events", verifyToken, async (req, res) => {
+  const { title, description, event_date, event_time, location } = req.body;
+
+  let creator_id = req.user.id;
 
   if (!title || !event_date || !event_time) {
     return res.status(400).json({ message: "Missing required fields" });
@@ -355,12 +364,10 @@ app.delete("/posts/:id", async (req, res) => {
 });
 
 app.get("/notes", verifyToken, async (req, res) => {
-  const { user_id, diploma, school_of, search } = req.query;
+  const { diploma, school_of, search } = req.query;
 
-  if (!user_id) {
-    return res.status(400).json({ message: "user_id is required" });
-  }
   let query = "SELECT * FROM notes WHERE user_id = ?";
+  let user_id = req.user.id;
   let values = [user_id];
 
   if (diploma) {
