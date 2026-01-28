@@ -9,12 +9,14 @@ let app = express();
 app.use(express.json());
 
 // CORS configuration
-app.use(cors({
-  origin: "http://localhost:3000",
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  }),
+);
 
 const DEMO_USER = { user_id: 1, username: "24041225", password: "apple 123" };
 
@@ -65,7 +67,11 @@ app.post("/login", async (req, res) => {
   // Check against demo user
   if (studentId === DEMO_USER.username && password === DEMO_USER.password) {
     const token = jwt.sign(
-      { user_id: DEMO_USER.user_id, id: DEMO_USER.user_id, username: DEMO_USER.username },
+      {
+        user_id: DEMO_USER.user_id,
+        id: DEMO_USER.user_id,
+        username: DEMO_USER.username,
+      },
       process.env.JWT_SECRET,
       { expiresIn: "1h" },
     );
@@ -132,7 +138,9 @@ app.get("/events", async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error("Error in /events:", err.message);
-    res.status(500).json({ message: "Failed to fetch events", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Failed to fetch events", error: err.message });
   } finally {
     if (conn) {
       console.log("Releasing connection");
@@ -229,7 +237,6 @@ app.delete("/events/:id", verifyToken, async (req, res) => {
   }
 });
 
-
 app.get("/posts", async (req, res) => {
   let conn;
   try {
@@ -287,7 +294,12 @@ app.post("/posts", verifyToken, async (req, res) => {
   try {
     conn = await pool.getConnection();
     const query = `INSERT INTO Posts (user_id, title, content, category) VALUES (?, ?, ?, ?)`;
-    const [result] = await conn.execute(query, [user_id, title, content, category]);
+    const [result] = await conn.execute(query, [
+      user_id,
+      title,
+      content,
+      category,
+    ]);
 
     res.status(201).json({
       message: "Post created successfully",
@@ -308,7 +320,12 @@ app.put("/posts/:id", verifyToken, async (req, res) => {
   try {
     conn = await pool.getConnection();
     const query = `UPDATE Posts SET title = ?, content = ?, category = ? WHERE post_id = ?`;
-    const [result] = await conn.execute(query, [title, content, category, req.params.id]);
+    const [result] = await conn.execute(query, [
+      title,
+      content,
+      category,
+      req.params.id,
+    ]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Post not found" });
@@ -354,7 +371,7 @@ app.get("/mynotes", verifyToken, async (req, res) => {
     conn = await pool.getConnection();
     const [rows] = await conn.execute(
       "SELECT * FROM notes WHERE user_id = ? AND created_at >= ? AND updated_at <= ? ORDER BY created_at DESC",
-      [userId, created_at, updated_at]
+      [userId, created_at, updated_at],
     );
     res.json(rows);
   } catch (err) {
@@ -369,7 +386,9 @@ app.get("/notes", async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
-    const [rows] = await conn.execute("SELECT * FROM notes ORDER BY created_at DESC");
+    const [rows] = await conn.execute(
+      "SELECT * FROM notes ORDER BY created_at DESC",
+    );
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -385,10 +404,9 @@ app.get("/notes/:id", async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
-    const [rows] = await conn.execute(
-      "SELECT * FROM notes WHERE note_id = ?",
-      [id]
-    );
+    const [rows] = await conn.execute("SELECT * FROM notes WHERE note_id = ?", [
+      id,
+    ]);
 
     if (rows.length === 0) {
       return res.status(404).json({ message: "Note not found" });
@@ -404,10 +422,13 @@ app.get("/notes/:id", async (req, res) => {
 });
 
 app.post("/notes/add", async (req, res) => {
-  const { user_id, title, description, content, pdf_url, school_of, diploma } = req.body;
+  const { user_id, title, description, content, pdf_url, school_of, diploma } =
+    req.body;
 
   if (!title || !description || !school_of || !diploma) {
-    return res.status(400).send("Title, description, school_of, and diploma are required");
+    return res
+      .status(400)
+      .send("Title, description, school_of, and diploma are required");
   }
 
   if (!content && !pdf_url) {
@@ -424,7 +445,7 @@ app.post("/notes/add", async (req, res) => {
 
     res.status(201).json({
       message: "Note added successfully",
-      note_id: result.insertId
+      note_id: result.insertId,
     });
   } catch (err) {
     console.error(err);
@@ -436,10 +457,13 @@ app.post("/notes/add", async (req, res) => {
 
 app.put("/notes/:id", async (req, res) => {
   const { id } = req.params;
-  const { user_id, title, description, content, pdf_url, school_of, diploma } = req.body;
+  const { user_id, title, description, content, pdf_url, school_of, diploma } =
+    req.body;
 
   if (!title || !description || !school_of || !diploma) {
-    return res.status(400).send("Title, description, school_of, and diploma are required");
+    return res
+      .status(400)
+      .send("Title, description, school_of, and diploma are required");
   }
 
   if (!content && !pdf_url) {
@@ -455,7 +479,9 @@ app.put("/notes/:id", async (req, res) => {
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).send("Note not found or you don't have permission to edit it");
+      return res
+        .status(404)
+        .send("Note not found or you don't have permission to edit it");
     }
 
     res.json({ message: "Note updated successfully" });
@@ -480,7 +506,9 @@ app.delete("/notes/:id", async (req, res) => {
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).send("Note not found or you don't have permission to delete it");
+      return res
+        .status(404)
+        .send("Note not found or you don't have permission to delete it");
     }
 
     res.json({ message: "Note deleted successfully" });
