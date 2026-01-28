@@ -38,9 +38,9 @@ const verifyToken = (req, res, next) => {
   if (!header) {
     return res.status(401).json({ error: "Authorization header missing" });
   }
-  
+
   const [type, token] = header.split(" ");
-  
+
   if (type !== "Bearer" || !token) {
     return res.status(401).json({ error: "Invalid Authorization format" });
   }
@@ -347,13 +347,14 @@ app.delete("/posts/:id", verifyToken, async (req, res) => {
 //all notes, kaelynn
 app.get("/mynotes", verifyToken, async (req, res) => {
   const userId = req.user.user_id || req.user.id;
+  const { created_at, updated_at } = req.query;
 
   let conn;
   try {
     conn = await pool.getConnection();
     const [rows] = await conn.execute(
-      "SELECT * FROM notes WHERE user_id = ? ORDER BY created_at DESC",
-      [userId]
+      "SELECT * FROM notes WHERE user_id = ? AND created_at >= ? AND updated_at <= ? ORDER BY created_at DESC",
+      [userId, created_at, updated_at]
     );
     res.json(rows);
   } catch (err) {
@@ -364,7 +365,7 @@ app.get("/mynotes", verifyToken, async (req, res) => {
   }
 });
 
-app.get("/notes", verifyToken, async (req, res) => {
+app.get("/notes", async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
@@ -378,22 +379,21 @@ app.get("/notes", verifyToken, async (req, res) => {
   }
 });
 
-app.get("/notes/:id", verifyToken, async (req, res) => {
+app.get("/notes/:id", async (req, res) => {
   const { id } = req.params;
-  const userId = req.user.user_id || req.user.id;
-  
+
   let conn;
   try {
     conn = await pool.getConnection();
     const [rows] = await conn.execute(
-      "SELECT * FROM notes WHERE note_id = ?", 
+      "SELECT * FROM notes WHERE note_id = ?",
       [id]
     );
-    
+
     if (rows.length === 0) {
       return res.status(404).json({ message: "Note not found" });
     }
-    
+
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -403,9 +403,8 @@ app.get("/notes/:id", verifyToken, async (req, res) => {
   }
 });
 
-app.post("/notes/add", verifyToken, async (req, res) => {
-  const user_id = req.user.user_id || req.user.id;
-  const { title, description, content, pdf_url, school_of, diploma } = req.body;
+app.post("/notes/add", async (req, res) => {
+  const { user_id, title, description, content, pdf_url, school_of, diploma } = req.body;
 
   if (!title || !description || !school_of || !diploma) {
     return res.status(400).send("Title, description, school_of, and diploma are required");
@@ -422,10 +421,10 @@ app.post("/notes/add", verifyToken, async (req, res) => {
       "INSERT INTO notes (user_id, title, description, content, pdf_url, school_of, diploma) VALUES (?, ?, ?, ?, ?, ?, ?)",
       [user_id, title, description, content, pdf_url, school_of, diploma],
     );
-    
-    res.status(201).json({ 
+
+    res.status(201).json({
       message: "Note added successfully",
-      note_id: result.insertId 
+      note_id: result.insertId
     });
   } catch (err) {
     console.error(err);
@@ -435,10 +434,9 @@ app.post("/notes/add", verifyToken, async (req, res) => {
   }
 });
 
-app.put("/notes/:id", verifyToken, async (req, res) => {
+app.put("/notes/:id", async (req, res) => {
   const { id } = req.params;
-  const user_id = req.user.user_id || req.user.id;
-  const { title, description, content, pdf_url, school_of, diploma } = req.body;
+  const { user_id, title, description, content, pdf_url, school_of, diploma } = req.body;
 
   if (!title || !description || !school_of || !diploma) {
     return res.status(400).send("Title, description, school_of, and diploma are required");
@@ -469,9 +467,9 @@ app.put("/notes/:id", verifyToken, async (req, res) => {
   }
 });
 
-app.delete("/notes/:id", verifyToken, async (req, res) => {
+app.delete("/notes/:id", async (req, res) => {
   const { id } = req.params;
-  const user_id = req.user.user_id || req.user.id;
+  const { user_id } = req.body;
 
   let conn;
   try {
