@@ -33,23 +33,22 @@ const dbConfig = {
 // Create connection pool with error handling
 const pool = mysql.createPool(dbConfig);
 
-pool.on('error', (err) => {
-  console.error('Pool error:', err);
-});
-
-pool.on('connection', (conn) => {
-  console.log('New connection acquired from pool');
-});
-
 const verifyToken = (req, res, next) => {
-  const token = req.headers["authorization"];
-  if (!token) {
-    return res.status(403).send("A token is required for authentication");
+  const header = req.headers.authorization;
+  const [type, token] = header.split(" ");
+  console.log(token);
+  if (type !== "Bearer" || !token) {
+    return res.status(401).json({ error: "Invalid Authorization format" });
   }
+  console.log("yes");
 
+  console.log("leeeerereee");
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(403).send("Invalid token");
+    if (err) return console.error(err.message);
+    console.log("okay");
+    console.log(decoded);
     req.user = decoded;
+    console.log(req.user);
     next();
   });
 };
@@ -60,24 +59,20 @@ const verifyToken = (req, res, next) => {
 
 // Login route for demo users and real users
 app.post("/login", async (req, res) => {
-  console.log("Login request body:", req.body);
-  
-  // Handle both "studentId" and "username" field names
-  const { studentId, username, password } = req.body;
-  const id = studentId || username;
+  const { studentId, password } = req.body;
 
-  if (!id || !password) {
-    console.log("Missing credentials - id:", id, "password:", password);
-    return res.status(400).json({ error: "Student ID/username and password are required" });
+  if (!studentId || !password) {
+    return res.status(400).send("Student ID and password are required");
   }
 
   // Check against demo user
-  if (id === DEMO_USER.username && password === DEMO_USER.password) {
+  if (studentId === DEMO_USER.username && password === DEMO_USER.password) {
     const token = jwt.sign(
-      { id: DEMO_USER.user_id, username: DEMO_USER.username },
+      { id: DEMO_USER.username, username: "kaelynn" },
       process.env.JWT_SECRET,
       { expiresIn: "1h" },
     );
+    console.log("n");
     return res.json({ token });
   }
 
@@ -85,7 +80,7 @@ app.post("/login", async (req, res) => {
   try {
     const connection = await pool.getConnection();
     const [rows] = await connection.execute(
-      "SELECT * FROM users WHERE student_id = ?",
+      "SELECT * FROM Users WHERE user_id = ?",
       [studentId],
     );
     connection.release();
@@ -113,8 +108,22 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// ================================
-// Event (Jiayi)
+const allowedOrigins = ["http://localhost:3000"];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("Not allowed by CORS"));
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: false,
+};
+
+app.use(cors(corsOptions));
+
+//Event (Jiayi)
 // GET all events
 app.get("/events", async (req, res) => {
   let conn;
@@ -160,9 +169,11 @@ app.get("/events/:id", async (req, res) => {
 });
 
 // ADD new event
-app.post("/events", async (req, res) => {
-  const { title, description, event_date, event_time, location, creator_id } =
-    req.body;
+app.post("/events", verifyToken, async (req, res) => {
+  const { title, description, event_date, event_time, location } = req.body;
+
+  let creator_id = req.user.id;
+  console.log(creator_id + "leeeeee");
 
   if (!title || !event_date || !event_time) {
     return res.status(400).json({ message: "Missing required fields" });
@@ -368,24 +379,10 @@ app.delete("/posts/:id", async (req, res) => {
 });
 
 app.get("/notes", verifyToken, async (req, res) => {
-  try {
-    const connection = await pool.getConnection();
-    const [rows] = await connection.execute("SELECT * FROM notes");
-    connection.release();
-    res.json(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to fetch all notes" });
-  }
-});
+  const { diploma, school_of, search } = req.query;
 
-app.get("/mynotes", verifyToken, async (req, res) => {
-  const { user_id, diploma, school_of, search } = req.query;
-
-  if (!user_id) {
-    return res.status(400).json({ message: "user_id is required" });
-  }
   let query = "SELECT * FROM notes WHERE user_id = ?";
+  let user_id = req.user.id;
   let values = [user_id];
 
   if (diploma) {
