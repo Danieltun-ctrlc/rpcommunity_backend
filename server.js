@@ -4,8 +4,7 @@ env_set.config();
 const mysql = require("mysql2/promise");
 let express = require("express");
 let cors = require("cors");
-const jwt = require("jsonwebtoken");
-
+let jwt = require("jsonwebtoken");
 let app = express();
 app.use(express.json());
 
@@ -86,8 +85,8 @@ app.post("/login", async (req, res) => {
   try {
     const connection = await pool.getConnection();
     const [rows] = await connection.execute(
-      "SELECT * FROM users WHERE student_id = ? OR username = ?",
-      [id, id],
+      "SELECT * FROM users WHERE student_id = ?",
+      [studentId],
     );
     connection.release();
 
@@ -404,10 +403,13 @@ app.get("/notes", verifyToken, async (req, res) => {
 });
 
 app.post("/notes", verifyToken, async (req, res) => {
-  const { user_id, title, description, content, pdf_url, school_of, diploma } = req.body;
+  const { user_id, title, description, content, pdf_url, school_of, diploma } =
+    req.body;
 
   if (!title || !description || !school_of || !diploma) {
-    return res.status(400).send("Title, description, school_of, and diploma are required");
+    return res
+      .status(400)
+      .send("Title, description, school_of, and diploma are required");
   }
 
   if (!content && !pdf_url) {
@@ -418,7 +420,7 @@ app.post("/notes", verifyToken, async (req, res) => {
     const connection = await pool.getConnection();
     await connection.execute(
       "INSERT INTO notes (user_id, title, description, content, pdf_url, school_of, diploma) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [req.user.id, title, description, content, pdf_url, school_of, diploma]
+      [req.user.id, title, description, content, pdf_url, school_of, diploma],
     );
     connection.release();
     res.status(201).json({ message: "Note added successfully" });
@@ -430,10 +432,13 @@ app.post("/notes", verifyToken, async (req, res) => {
 
 app.put("/notes/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { user_id, title, description, content, pdf_url, school_of, diploma } = req.body;
+  const { user_id, title, description, content, pdf_url, school_of, diploma } =
+    req.body;
 
   if (!title || !description || !school_of || !diploma) {
-    return res.status(400).send("Title, description, school_of, and diploma are required");
+    return res
+      .status(400)
+      .send("Title, description, school_of, and diploma are required");
   }
 
   if (!content && !pdf_url) {
@@ -444,7 +449,16 @@ app.put("/notes/:id", verifyToken, async (req, res) => {
     const connection = await pool.getConnection();
     const [result] = await connection.execute(
       "UPDATE notes SET title = ?, description = ?, content = ?, pdf_url = ?, school_of = ?, diploma = ? WHERE note_id = ? AND user_id = ?",
-      [title, description, content, pdf_url, school_of, diploma, id, req.user.id]
+      [
+        title,
+        description,
+        content,
+        pdf_url,
+        school_of,
+        diploma,
+        id,
+        req.user.id,
+      ],
     );
     connection.release();
 
@@ -471,10 +485,10 @@ app.delete("/notes/:id", verifyToken, async (req, res) => {
 
   try {
     const connection = await pool.getConnection();
-    const [result] = await connection.execute("DELETE FROM notes WHERE note_id = ? AND user_id = ?", [
-      id,
-      req.user.id,
-    ]);
+    const [result] = await connection.execute(
+      "DELETE FROM notes WHERE note_id = ? AND user_id = ?",
+      [id, req.user.id],
+    );
     connection.release();
 
     if (result.affectedRows === 0) {
