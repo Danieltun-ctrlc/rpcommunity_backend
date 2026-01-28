@@ -8,7 +8,15 @@ let jwt = require("jsonwebtoken");
 let app = express();
 app.use(express.json());
 
-const DEMO_USER = { user_id: 1, username: "24041225", password: "apple123" };
+// CORS configuration
+app.use(cors({
+  origin: "http://localhost:3000",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+}));
+
+const DEMO_USER = { user_id: 1, username: "24041225", password: "apple 123" };
 
 // Database configuration
 const dbConfig = {
@@ -22,23 +30,8 @@ const dbConfig = {
   queueLimit: 0,
 };
 
-// Create connection pool
+// Create connection pool with error handling
 const pool = mysql.createPool(dbConfig);
-
-const allowedOrigins = ["http://localhost:3000"];
-
-const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error("Not allowed by CORS"));
-  },
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: false,
-};
-
-app.use(cors(corsOptions));
 
 const verifyToken = (req, res, next) => {
   const header = req.headers.authorization;
@@ -66,14 +59,14 @@ const verifyToken = (req, res, next) => {
 // ================================
 
 app.post("/login", async (req, res) => {
-  const { username, password } = req.body;
+  const { studentId, password } = req.body;
 
-  if (!username || !password) {
+  if (!studentId || !password) {
     return res.status(400).send("Student ID and password are required");
   }
 
   // Check against demo user
-  if (username === DEMO_USER.username && password === DEMO_USER.password) {
+  if (studentId === DEMO_USER.username && password === DEMO_USER.password) {
     const token = jwt.sign(
       { user_id: DEMO_USER.user_id, id: DEMO_USER.user_id, username: DEMO_USER.username },
       process.env.JWT_SECRET,
@@ -87,7 +80,7 @@ app.post("/login", async (req, res) => {
     const connection = await pool.getConnection();
     const [rows] = await connection.execute(
       "SELECT * FROM Users WHERE user_id = ?",
-      [username],
+      [studentId],
     );
     connection.release();
 
@@ -114,21 +107,40 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// ================================
-// Events Routes
-// ================================
+const allowedOrigins = ["http://localhost:3000"];
 
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("Not allowed by CORS"));
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: false,
+};
+
+app.use(cors(corsOptions));
+
+//Event (Jiayi)
+// GET all events
 app.get("/events", async (req, res) => {
   let conn;
   try {
+    console.log("Attempting to get connection from pool for /events");
     conn = await pool.getConnection();
+    console.log("Connection acquired, executing query");
     const [rows] = await conn.execute("SELECT * FROM events");
+    console.log("Query executed successfully, returning results");
     res.json(rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to fetch events" });
+    console.error("Error in /events:", err.message);
+    res.status(500).json({ message: "Failed to fetch events", error: err.message });
   } finally {
-    if (conn) conn.release();
+    if (conn) {
+      console.log("Releasing connection");
+      conn.release();
+    }
   }
 });
 
