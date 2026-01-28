@@ -18,7 +18,7 @@ app.use(
   }),
 );
 
-const DEMO_USER = { user_id: 1, username: "24041225", password: "apple 123" };
+const DEMO_USER = { user_id: 1, username: "24041225", password: "apple123" };
 
 // Database configuration
 const dbConfig = {
@@ -51,7 +51,9 @@ const verifyToken = (req, res, next) => {
     if (err) {
       return res.status(403).json({ error: "Invalid or expired token" });
     }
+    console.log(decoded);
     req.user = decoded;
+
     next();
   });
 };
@@ -75,6 +77,8 @@ app.post("/login", async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "1h" },
     );
+    console.log("yest");
+
     return res.json({ token, user_id: DEMO_USER.user_id });
   }
 
@@ -103,6 +107,7 @@ app.post("/login", async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "1h" },
     );
+    console.log("yesddd");
     res.json({ token, user_id: user.user_id });
   } catch (err) {
     console.error(err);
@@ -363,16 +368,16 @@ app.delete("/posts/:id", verifyToken, async (req, res) => {
 
 //all notes, kaelynn
 app.get("/mynotes", verifyToken, async (req, res) => {
-  const userId = req.user.user_id || req.user.id;
-  const { created_at, updated_at } = req.query;
+  const userId = req.user.username;
+  console.log(userId);
+  // const { created_at, updated_at } = req.query;
 
   let conn;
   try {
     conn = await pool.getConnection();
-    const [rows] = await conn.execute(
-      "SELECT * FROM notes WHERE user_id = ? AND created_at >= ? AND updated_at <= ? ORDER BY created_at DESC",
-      [userId, created_at, updated_at],
-    );
+    const [rows] = await conn.execute("SELECT * FROM notes WHERE user_id = ?", [
+      userId,
+    ]);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -421,9 +426,9 @@ app.get("/notes/:id", async (req, res) => {
   }
 });
 
-app.post("/notes/add", async (req, res) => {
-  const { user_id, title, description, content, pdf_url, school_of, diploma } =
-    req.body;
+app.post("/notes", verifyToken, async (req, res) => {
+  const { title, description, content, pdf_url, school_of, diploma } = req.body;
+  let user_id = req.user.username;
 
   if (!title || !description || !school_of || !diploma) {
     return res
@@ -455,10 +460,12 @@ app.post("/notes/add", async (req, res) => {
   }
 });
 
-app.put("/notes/:id", async (req, res) => {
+app.put("/notes/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { user_id, title, description, content, pdf_url, school_of, diploma } =
-    req.body;
+  const { title, description, content, pdf_url, school_of, diploma } = req.body;
+
+  let user_id = req.user.username;
+  console.log(user_id);
 
   if (!title || !description || !school_of || !diploma) {
     return res
