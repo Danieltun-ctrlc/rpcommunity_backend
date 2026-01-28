@@ -48,6 +48,7 @@ const verifyToken = (req, res, next) => {
     return res.status(401).json({ error: "Invalid Authorization format" });
   }
   console.log("yes");
+  console.log(token + "WTF");
 
   console.log("leeeerereee");
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
@@ -75,7 +76,7 @@ app.post("/login", async (req, res) => {
   // Check against demo user
   if (username === DEMO_USER.username && password === DEMO_USER.password) {
     const token = jwt.sign(
-      { id: DEMO_USER.user_id, username: DEMO_USER.username },
+      { id: DEMO_USER.username, username: "kaelynn" },
       process.env.JWT_SECRET,
       { expiresIn: "1h" },
     );
@@ -159,6 +160,7 @@ app.post("/events", verifyToken, async (req, res) => {
   const { title, description, event_date, event_time, location } = req.body;
 
   let creator_id = req.user.id;
+  console.log(creator_id + "leeeeee");
 
   if (!title || !event_date || !event_time) {
     return res.status(400).json({ message: "Missing required fields" });
@@ -364,7 +366,7 @@ app.delete("/posts/:id", async (req, res) => {
 });
 
 app.get("/notes", verifyToken, async (req, res) => {
-  const { user_id, diploma, school_of, search } = req.query;
+  const { diploma, school_of, search } = req.query;
 
   let query = "SELECT * FROM notes WHERE user_id = ?";
   let user_id = req.user.id;
