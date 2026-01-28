@@ -378,36 +378,39 @@ app.delete("/posts/:id", async (req, res) => {
   }
 });
 
-app.get("/notes", verifyToken, async (req, res) => {
-  const { diploma, school_of, search } = req.query;
-
-  let query = "SELECT * FROM notes WHERE user_id = ?";
-  let user_id = req.user.id;
-  let values = [user_id];
-
-  if (diploma) {
-    query += " AND diploma = ?";
-    values.push(diploma);
-  }
-
-  if (school_of) {
-    query += " AND school_of = ?";
-    values.push(school_of);
-  }
-
-  if (search) {
-    query += " AND title LIKE ?";
-    values.push(`%${search}%`);
-  }
+app.get("/mynotes", verifyToken, async (req, res) => {
+  const userId = req.user.id;  // Get the user_id from the token
 
   try {
     const connection = await pool.getConnection();
-    const [rows] = await connection.execute(query, values);
+    const [rows] = await connection.execute(
+      "SELECT * FROM notes WHERE user_id = ?",
+      [userId]
+    );
     connection.release();
+
     res.json(rows);
   } catch (err) {
     console.error(err);
-    res.status(500).send("Error fetching notes");
+    res.status(500).json({ message: "Failed to fetch your notes" });
+  }
+});
+
+// ============================
+// Get All Notes from All Users
+// ============================
+app.get("/notes", verifyToken, async (req, res) => {
+  try {
+    const connection = await pool.getConnection();
+    const [rows] = await connection.execute(
+      "SELECT * FROM notes"
+    );
+    connection.release();
+
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch all notes" });
   }
 });
 
