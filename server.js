@@ -368,6 +368,18 @@ app.delete("/posts/:id", async (req, res) => {
 });
 
 app.get("/notes", verifyToken, async (req, res) => {
+  try {
+    const connection = await pool.getConnection();
+    const [rows] = await connection.execute("SELECT * FROM notes");
+    connection.release();
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch all notes" });
+  }
+});
+
+app.get("/mynotes", verifyToken, async (req, res) => {
   const { user_id, diploma, school_of, search } = req.query;
 
   if (!user_id) {
