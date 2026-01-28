@@ -54,10 +54,7 @@ const verifyToken = (req, res, next) => {
   });
 };
 
-// ================================
-// Authentication & Login Route
-// ================================
-
+//login
 app.post("/login", async (req, res) => {
   const { studentId, password } = req.body;
 
@@ -232,9 +229,6 @@ app.delete("/events/:id", verifyToken, async (req, res) => {
   }
 });
 
-// ================================
-// Posts Routes
-// ================================
 
 app.get("/posts", async (req, res) => {
   let conn;
@@ -350,11 +344,7 @@ app.delete("/posts/:id", verifyToken, async (req, res) => {
   }
 });
 
-// ================================
-// Notes Routes (FIXED)
-// ================================
-
-// Get My Notes (User specific)
+//all notes, kaelynn
 app.get("/mynotes", verifyToken, async (req, res) => {
   const userId = req.user.user_id || req.user.id;
 
@@ -445,7 +435,6 @@ app.post("/notes/add", verifyToken, async (req, res) => {
   }
 });
 
-// Update Note
 app.put("/notes/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
   const user_id = req.user.user_id || req.user.id;
@@ -480,7 +469,6 @@ app.put("/notes/:id", verifyToken, async (req, res) => {
   }
 });
 
-// Delete Note (FIXED - removed requirement for user_id in body)
 app.delete("/notes/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
   const user_id = req.user.user_id || req.user.id;
