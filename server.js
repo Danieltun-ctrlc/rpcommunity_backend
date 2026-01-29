@@ -38,21 +38,26 @@ const pool = mysql.createPool(dbConfig);
 const verifyToken = (req, res, next) => {
   const header = req.headers.authorization;
   if (!header) {
+    console.log("header");
     return res.status(401).json({ error: "Authorization header missing" });
   }
 
   const [type, token] = header.split(" ");
+  console.log(token);
 
   if (type !== "Bearer" || !token) {
     return res.status(401).json({ error: "Invalid Authorization format" });
   }
+  console.log("nice");
 
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if (err) {
+      console.log("wtf");
       return res.status(403).json({ error: "Invalid or expired token" });
     }
     console.log(decoded);
     req.user = decoded;
+    console.log(req.user + "yes it connect");
 
     next();
   });
@@ -289,7 +294,7 @@ app.get("/posts/:id", async (req, res) => {
 
 app.post("/posts", verifyToken, async (req, res) => {
   const { title, content, category } = req.body;
-  const user_id = req.user.user_id;
+  const user_id = req.user.username;
 
   if (!content) {
     return res.status(400).json({ message: "Content is required" });
@@ -361,6 +366,25 @@ app.delete("/posts/:id", verifyToken, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to delete post" });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+app.get("/myposts", verifyToken, async (req, res) => {
+  const userId = req.user.username;
+  console.log(userId);
+
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const [rows] = await conn.execute("SELECT * FROM Posts WHERE user_id = ?", [
+      userId,
+    ]);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch your posts" });
   } finally {
     if (conn) conn.release();
   }
