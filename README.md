@@ -27,20 +27,6 @@ Installation
     npm install
     ```
 
-## Configuration
-
-Create a `.env` file in the root directory and configure your database and JWT settings:
-
-```env
-DB_HOST=mysql-1ad8da3b-myrp-6c70.i.aivencloud.com
-DB_NAME=defaultdb
-DB_PASSWORD=AVNS_m3bPtoWwbdma3oZgHcQ
-DB_PORT=16617
-DB_USER=avnadmin
-JWT_SECRET=iAUQBkA7I3ldmf1K59DkkhXCiGQ1InUHKgDkzFXh4QO
-```
-
-
 ## Usage
 
 **Start the server:**
