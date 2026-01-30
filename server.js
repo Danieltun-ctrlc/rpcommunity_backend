@@ -8,15 +8,36 @@ let jwt = require("jsonwebtoken");
 let app = express();
 app.use(express.json());
 
-// CORS configuration
+
+const allowedOrigins = new Set([
+  "http://localhost:3000",
+  "https://monumental-gaufre-ed6370.netlify.app",
+]);
+
 app.use(
   cors({
-    origin: "http://localhost:3000, https://monumental-gaufre-ed6370.netlify.app",
+    origin: (origin, cb) => {
+      
+      if (!origin) {
+        cb(null, true);
+        return;
+      }
+
+      if (allowedOrigins.has(origin)) {
+        cb(null, true);
+        return;
+      }
+
+      cb(new Error("CORS blocked for origin: " + origin), false);
+    },
+    credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
   }),
 );
+
+
+app.options("*", cors());
 
 const DEMO_USER = { user_id: "1", username: "24041225", password: "apple123" };
 
