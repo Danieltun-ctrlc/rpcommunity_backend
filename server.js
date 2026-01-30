@@ -184,7 +184,8 @@ app.get("/events/:id", async (req, res) => {
 app.post("/events", verifyToken, async (req, res) => {
   const { title, description, event_date, event_time, location } = req.body;
 
-  let creator_id = req.user.id;
+  let creator_id = req.user.username;
+  console.log(creator_id + "huh");
 
   if (!title || !event_date || !event_time) {
     return res.status(400).json({ message: "Missing required fields" });
@@ -524,9 +525,9 @@ app.put("/notes/:id", verifyToken, async (req, res) => {
   }
 });
 
-app.delete("/notes/:id", async (req, res) => {
+app.delete("/notes/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { user_id } = req.body;
+  let user_id = req.user.username;
 
   let conn;
   try {
