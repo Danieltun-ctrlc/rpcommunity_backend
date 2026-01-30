@@ -450,22 +450,28 @@ app.get("/notes/:id", async (req, res) => {
     if (conn) conn.release();
   }
 });
+
 app.post("/notes/add", verifyToken, async (req, res) => {
   const { title, description, content, pdf_url, school_of, diploma } = req.body;
   console.log("DEBUG NOTES ADD: req.user from token:", req.user);
-  const user_id = req.user.user_id || req.user.id;
+  const user_id = req.user.username;
   console.log("DEBUG NOTES ADD: user_id to insert:", user_id);
 
   if (!title || !description || !school_of || !diploma) {
-    return res.status(400).send("Title, description, school_of, and diploma are required");
+    console.log("tgthis one");
+    return res
+      .status(400)
+      .send("Title, description, school_of, and diploma are required");
   }
 
   if (!content && !pdf_url) {
+    console.log("yes");
     return res.status(400).send("Content or PDF URL is required");
   }
 
   let conn;
   try {
+    console.log("yes");
     conn = await pool.getConnection();
     const [result] = await conn.execute(
       "INSERT INTO notes (user_id, title, description, content, pdf_url, school_of, diploma) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -474,7 +480,7 @@ app.post("/notes/add", verifyToken, async (req, res) => {
 
     res.status(201).json({
       message: "Note added successfully",
-      note_id: result.insertId
+      note_id: result.insertId,
     });
   } catch (err) {
     console.error(err);
