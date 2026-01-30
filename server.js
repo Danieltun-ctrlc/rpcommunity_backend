@@ -364,6 +364,26 @@ app.delete("/posts/:id", verifyToken, async (req, res) => {
   }
 });
 
+app.get("/myposts", verifyToken, async (req, res) => {
+  const userId = req.user.username;
+  console.log(userId);
+
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const [rows] = await conn.execute("SELECT * FROM Posts WHERE user_id = ?", [
+      userId,
+    ]);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch your posts" });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+
 //all notes, kaelynn
 app.get("/mynotes", verifyToken, async (req, res) => {
   const userId = req.user.username;
