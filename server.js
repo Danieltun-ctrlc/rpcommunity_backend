@@ -37,7 +37,8 @@ app.use(
 );
 
 
-app.options("*", cors());
+app.options(/.*/, cors());
+
 
 const DEMO_USER = { user_id: "1", username: "24041225", password: "apple123" };
 
