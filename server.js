@@ -8,7 +8,6 @@ let jwt = require("jsonwebtoken");
 let app = express();
 app.use(express.json());
 
-
 const allowedOrigins = new Set([
   "http://localhost:3000",
   "https://monumental-gaufre-ed6370.netlify.app",
@@ -17,7 +16,6 @@ const allowedOrigins = new Set([
 app.use(
   cors({
     origin: (origin, cb) => {
-      
       if (!origin) {
         cb(null, true);
         return;
@@ -36,9 +34,7 @@ app.use(
   }),
 );
 
-
 app.options(/.*/, cors());
-
 
 const DEMO_USER = { user_id: "1", username: "24041225", password: "apple123" };
 
@@ -89,7 +85,11 @@ app.post("/login", async (req, res) => {
   // Check against demo user
   if (studentId === DEMO_USER.username && password === DEMO_USER.password) {
     const token = jwt.sign(
-      { user_id: DEMO_USER.user_id, id: DEMO_USER.user_id, username: DEMO_USER.username },
+      {
+        user_id: DEMO_USER.user_id,
+        id: DEMO_USER.user_id,
+        username: DEMO_USER.username,
+      },
       process.env.JWT_SECRET,
       { expiresIn: "1h" },
     );
@@ -128,8 +128,6 @@ app.post("/login", async (req, res) => {
   }
 });
 
-
-
 //Event (Jiayi)
 // GET all events
 app.get("/events", async (req, res) => {
@@ -143,7 +141,9 @@ app.get("/events", async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error("Error in /events:", err.message);
-    res.status(500).json({ message: "Failed to fetch events", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Failed to fetch events", error: err.message });
   } finally {
     if (conn) {
       console.log("Releasing connection");
@@ -177,7 +177,7 @@ app.get("/events/:id", async (req, res) => {
 app.post("/events", verifyToken, async (req, res) => {
   const { title, description, event_date, event_time, location } = req.body;
 
-  let creator_id = req.user.id;
+  let creator_id = req.user.username;
 
   if (!title || !event_date || !event_time) {
     return res.status(400).json({ message: "Missing required fields" });
@@ -240,7 +240,6 @@ app.delete("/events/:id", verifyToken, async (req, res) => {
   }
 });
 
-
 app.get("/posts", async (req, res) => {
   let conn;
   try {
@@ -288,7 +287,7 @@ app.get("/posts/:id", async (req, res) => {
 
 app.post("/posts", verifyToken, async (req, res) => {
   const { title, content, category } = req.body;
-  const user_id = req.user.user_id;
+  const user_id = req.user.username;
 
   if (!content) {
     return res.status(400).json({ message: "Content is required" });
@@ -298,7 +297,12 @@ app.post("/posts", verifyToken, async (req, res) => {
   try {
     conn = await pool.getConnection();
     const query = `INSERT INTO Posts (user_id, title, content, category) VALUES (?, ?, ?, ?)`;
-    const [result] = await conn.execute(query, [user_id, title, content, category]);
+    const [result] = await conn.execute(query, [
+      user_id,
+      title,
+      content,
+      category,
+    ]);
 
     res.status(201).json({
       message: "Post created successfully",
@@ -319,7 +323,12 @@ app.put("/posts/:id", verifyToken, async (req, res) => {
   try {
     conn = await pool.getConnection();
     const query = `UPDATE Posts SET title = ?, content = ?, category = ? WHERE post_id = ?`;
-    const [result] = await conn.execute(query, [title, content, category, req.params.id]);
+    const [result] = await conn.execute(query, [
+      title,
+      content,
+      category,
+      req.params.id,
+    ]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Post not found" });
@@ -363,7 +372,8 @@ app.get("/mynotes", verifyToken, async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
-    let query = "SELECT notes.*, Users.username FROM notes JOIN Users ON notes.user_id = Users.user_id WHERE notes.user_id = ?";
+    let query =
+      "SELECT notes.*, Users.username FROM notes JOIN Users ON notes.user_id = Users.user_id WHERE notes.user_id = ?";
     const params = [userId];
 
     if (created_at) {
@@ -391,7 +401,9 @@ app.get("/notes", async (req, res) => {
   let conn;
   try {
     conn = await pool.getConnection();
-    const [rows] = await conn.execute("SELECT notes.*, Users.username FROM notes JOIN Users ON notes.user_id = Users.user_id ORDER BY notes.created_at DESC");
+    const [rows] = await conn.execute(
+      "SELECT notes.*, Users.username FROM notes JOIN Users ON notes.user_id = Users.user_id ORDER BY notes.created_at DESC",
+    );
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -409,7 +421,7 @@ app.get("/notes/:id", async (req, res) => {
     conn = await pool.getConnection();
     const [rows] = await conn.execute(
       "SELECT notes.*, Users.username FROM notes JOIN Users ON notes.user_id = Users.user_id WHERE notes.note_id = ?",
-      [id]
+      [id],
     );
 
     if (rows.length === 0) {
@@ -433,7 +445,9 @@ app.post("/notes/add", verifyToken, async (req, res) => {
   }
 
   if (!title || !description || !school_of || !diploma) {
-    return res.status(400).json({ error: "Title, description, school_of, and diploma are required" });
+    return res.status(400).json({
+      error: "Title, description, school_of, and diploma are required",
+    });
   }
 
   if (!content && !pdf_url) {
@@ -446,12 +460,12 @@ app.post("/notes/add", verifyToken, async (req, res) => {
 
     const [result] = await conn.execute(
       "INSERT INTO notes (user_id, title, description, content, pdf_url, school_of, diploma) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [user_id, title, description, content, pdf_url, school_of, diploma]
+      [user_id, title, description, content, pdf_url, school_of, diploma],
     );
 
     res.status(201).json({
       message: "Note added successfully",
-      note_id: result.insertId
+      note_id: result.insertId,
     });
   } catch (err) {
     console.error("Database error:", err);
@@ -461,14 +475,15 @@ app.post("/notes/add", verifyToken, async (req, res) => {
   }
 });
 
-
-
 app.put("/notes/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { user_id, title, description, content, pdf_url, school_of, diploma } = req.body;
+  const { title, description, content, pdf_url, school_of, diploma } = req.body;
+  const user_id = req.user.username;
 
   if (!title || !description || !school_of || !diploma) {
-    return res.status(400).send("Title, description, school_of, and diploma are required");
+    return res
+      .status(400)
+      .send("Title, description, school_of, and diploma are required");
   }
 
   if (!content && !pdf_url) {
@@ -484,7 +499,9 @@ app.put("/notes/:id", verifyToken, async (req, res) => {
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).send("Note not found or you don't have permission to edit it");
+      return res
+        .status(404)
+        .send("Note not found or you don't have permission to edit it");
     }
 
     res.json({ message: "Note updated successfully" });
@@ -498,7 +515,7 @@ app.put("/notes/:id", verifyToken, async (req, res) => {
 
 app.delete("/notes/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-  const userId = req.user.user_id || req.user.id;
+  const userId = req.user.username;
 
   let conn;
   try {
@@ -509,7 +526,9 @@ app.delete("/notes/:id", verifyToken, async (req, res) => {
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).send("Note not found or you don't have permission to delete it");
+      return res
+        .status(404)
+        .send("Note not found or you don't have permission to delete it");
     }
 
     res.json({ message: "Note deleted successfully" });
